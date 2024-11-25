@@ -1,12 +1,13 @@
 # Cool Kids Regression Model and RSM
 
-#install.packages("dplyr")
-#install.packages("ggplot2")
-#install.packages("readr")
-#install.packages("tidyverse")
-#install.packages("viridis")
-#install.packages("corrplot")
-#install.packages("broom")
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("readr")
+install.packages("tidyverse")
+install.packages("viridis")
+install.packages("corrplot")
+install.packages("broom")
+install.packages("texreg")
 
 # Load Packages
 library(dplyr)
@@ -327,7 +328,7 @@ print(tidy(m3), n=nrow(tidy(m3)))
 # Compare the models
 texreg::htmlreg(
   l = list(m0,m1,m2,m3),
-  file = "model.html"
+  file = "Code/SIMPLE/model.html"
 )
 
 browseURL("model.html")

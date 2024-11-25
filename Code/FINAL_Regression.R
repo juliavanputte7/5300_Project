@@ -252,8 +252,9 @@ ggplot(data = data, aes(x = inv_commandtq, y = bms_dccurrent)) +
 
 # Linear Regression ######
 
+## Complex #######
 
-## M0 #########
+### M0 #########
 # only variables no interactions or poly
 m0 = data %>%
   lm(
@@ -270,7 +271,7 @@ m0 = data %>%
 glance(m0)
 print(tidy(m0), n=nrow(tidy(m0)))
 
-## M1 #####
+### M1 #####
 # adding some polynomial terms
 # only add them if they increase r-sq by more than .005
 m1 = data %>%
@@ -289,7 +290,7 @@ m1 = data %>%
 glance(m1)
 print(tidy(m1), n=nrow(tidy(m1)))
 
-## M2 #######
+### M2 #######
 # Model with interaction terms (no polynomial)
 m2 = data %>%
   lm(
@@ -327,7 +328,7 @@ m2 = data %>%
 glance(m2)
 print(tidy(m2), n=nrow(tidy(m2)))
 
-## M3 ####
+### M3 ####
 # model with interactions and polynomials
 m3 = data %>%
   lm(
@@ -337,44 +338,115 @@ m3 = data %>%
       poly(time,4) + # Tried out a few polynomial terms for distance, this caused the highest r-sq
       poly(packdcl,4) + # Tried out a few polynomial terms for packdcl, this caused the highest r-sq
       poly(packccl,3) + # Tried out a few polynomial terms for packccl, this caused the highest r-sq
-      #gforcelong + # polynomial did not increase r-sq here
-      #gforcelat + # polynomial did not increase r-sq here
+      gforcelong + # polynomial did not increase r-sq here
+      gforcelat + # polynomial did not increase r-sq here
       poly(avg_current,3) + 
-      #groundspeed + # polynomial did not increase r-sq here
-      #inv_commandtq +  # polynomial did not increase r-sq here
+      groundspeed + # polynomial did not increase r-sq here
+      inv_commandtq +  # polynomial did not increase r-sq here
       # interaction terms from m2
       I(time * packdcl) +
       I(time * packccl) +
-      #I(time * gforcelong) +
-      #I(time * gforcelat) +
+      I(time * gforcelong) +
+      I(time * gforcelat) +
       I(time * avg_current) +
-      #I(time * inv_commandtq) +
+      I(time * inv_commandtq) +
       I(packdcl * packccl) +
-      #I(packdcl * gforcelong) +
-      #I(packdcl * gforcelat) +
+      I(packdcl * gforcelong) +
+      I(packdcl * gforcelat) +
       I(packdcl * avg_current) +
-      #I(packdcl * inv_commandtq) +
-      #I(packccl * gforcelong) +
-      #I(packccl * gforcelat) +
-      I(packccl * avg_current) #+
-      #I(packccl * inv_commandtq) +
-      #I(gforcelong * gforcelat) +
-      #I(gforcelong * avg_current) +
-      #I(gforcelong * inv_commandtq) +
-      #I(gforcelat * avg_current) +
-      #I(gforcelat * inv_commandtq) +
-      #I(avg_current * inv_commandtq)
+      I(packdcl * inv_commandtq) +
+      I(packccl * gforcelong) +
+      I(packccl * gforcelat) +
+      I(packccl * avg_current) +
+      I(packccl * inv_commandtq) +
+      I(gforcelong * gforcelat) +
+      I(gforcelong * avg_current) +
+      I(gforcelong * inv_commandtq) +
+      I(gforcelat * avg_current) +
+      I(gforcelat * inv_commandtq) +
+      I(avg_current * inv_commandtq)
   )
 glance(m3)
 print(tidy(m3), n=nrow(tidy(m3)))
 
+## Simple ##########
+# only variables no interactions or poly
+m0_s = data %>%
+  lm(
+    formula = 
+      voltage_diff ~ # Response variable is average voltage. then in RSM we will minimize the error.
+      time + 
+      packdcl +
+      packccl + 
+      avg_current 
+  )
+glance(m0_s)
+print(tidy(m0_s), n=nrow(tidy(m0_s)))
+
+## M1 #####
+# adding some polynomial terms
+# only add them if they increase r-sq by more than .005
+m1_s = data %>%
+  lm(
+    formula = 
+      voltage_diff ~ # Response variable
+      poly(time,4) + # Tried out a few polynomial terms for distance, this caused the highest r-sq
+      poly(packdcl,4) + # Tried out a few polynomial terms for packdcl, this caused the highest r-sq
+      poly(packccl,3) + # Tried out a few polynomial terms for packccl, this caused the highest r-sq
+      poly(avg_current,3) 
+  )
+glance(m1_s)
+print(tidy(m1_s), n=nrow(tidy(m1_s)))
+
+## M2 #######
+# Model with interaction terms (no polynomial)
+m2_s = data %>%
+  lm(
+    formula = 
+      voltage_diff ~ # Response variable
+      time + 
+      packdcl +
+      packccl + 
+      avg_current +
+      I(time * packdcl) +
+      I(time * packccl) +
+      I(time * avg_current) +
+      I(packdcl * packccl) +
+      I(packdcl * avg_current) +
+      I(packccl * avg_current) 
+  )
+glance(m2_s)
+print(tidy(m2_s), n=nrow(tidy(m2_s)))
+
+## M3 ####
+# model with interactions and polynomials
+m3_s = data %>%
+  lm(
+    formula = 
+      voltage_diff ~ # Response variable
+      # Polynomial terms
+      poly(time,4) + # Tried out a few polynomial terms for distance, this caused the highest r-sq
+      poly(packdcl,4) + # Tried out a few polynomial terms for packdcl, this caused the highest r-sq
+      poly(packccl,3) + # Tried out a few polynomial terms for packccl, this caused the highest r-sq
+      poly(avg_current,3) + 
+      # interaction terms from m2
+      I(time * packdcl) +
+      I(time * packccl) +
+      I(time * avg_current) +
+      I(packdcl * packccl) +
+      I(packdcl * avg_current) +
+      I(packccl * avg_current) 
+  )
+glance(m3_s)
+print(tidy(m3_s), n=nrow(tidy(m3_s)))
+
 # Compare the models
 texreg::htmlreg(
-  l = list(m0,m1,m2,m3),
-  file = "model.html"
+  l = list(m0,m1,m2,m3, m0_s,m1_s,m2_s,m3_s),
+  file = "Code/all_models.html"
 )
 
-browseURL("model.html")
+browseURL("Code/all_models.html")
 
 # Regression Plots #########
 
