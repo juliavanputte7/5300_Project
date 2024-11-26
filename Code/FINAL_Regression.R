@@ -305,7 +305,7 @@ ggsave(
 m0 = data %>%
   lm(
     formula = 
-      voltage_diff ~ # Response variable is average voltage. then in RSM we will minimize the error.
+      sqrt(voltage_diff) ~ # Response variable is average voltage. then in RSM we will minimize the error.
       distance + 
       packdcl +
       packccl + 
@@ -323,7 +323,7 @@ print(tidy(m0), n=nrow(tidy(m0)))
 m1 = data %>%
   lm(
     formula = 
-      voltage_diff ~ # Response variable
+      sqrt(voltage_diff) ~ # Response variable
       poly(distance,4) + # Tried out a few polynomial terms for distance, this caused the highest r-sq
       poly(packdcl,4) + # Tried out a few polynomial terms for packdcl, this caused the highest r-sq
       poly(packccl,3) + # Tried out a few polynomial terms for packccl, this caused the highest r-sq
@@ -341,7 +341,7 @@ print(tidy(m1), n=nrow(tidy(m1)))
 m3 = data %>%
   lm(
     formula = 
-      voltage_diff ~ # Response variable
+      sqrt(voltage_diff) ~ # Response variable
       # Polynomial terms
       poly(distance,4) + # Tried out a few polynomial terms for distance, this caused the highest r-sq
       poly(packdcl,4) + # Tried out a few polynomial terms for packdcl, this caused the highest r-sq
@@ -385,7 +385,7 @@ print(tidy(m3), n=nrow(tidy(m3)))
 m0_s = data %>%
   lm(
     formula = 
-      voltage_diff ~ # Response variable is average voltage. then in RSM we will minimize the error.
+      sqrt(voltage_diff) ~ # Response variable is average voltage. then in RSM we will minimize the error.
       distance + 
       packdcl +
       packccl + 
@@ -400,7 +400,7 @@ print(tidy(m0_s), n=nrow(tidy(m0_s)))
 m1_s = data %>%
   lm(
     formula = 
-      voltage_diff ~ # Response variable
+      sqrt(voltage_diff) ~ # Response variable
       poly(distance,4) + # Tried out a few polynomial terms for distance, this caused the highest r-sq
       poly(packdcl,4) + # Tried out a few polynomial terms for packdcl, this caused the highest r-sq
       poly(packccl,3) + # Tried out a few polynomial terms for packccl, this caused the highest r-sq
@@ -415,7 +415,7 @@ print(tidy(m1_s), n=nrow(tidy(m1_s)))
 m3_s = data %>%
   lm(
     formula = 
-      voltage_diff ~ # Response variable
+      sqrt(voltage_diff) ~ # Response variable
       # Polynomial terms
       poly(distance,4) + # Tried out a few polynomial terms for distance, this caused the highest r-sq
       poly(packdcl,4) + # Tried out a few polynomial terms for packdcl, this caused the highest r-sq
@@ -484,7 +484,7 @@ regression_data = data %>% select(avg_current, packdcl,packccl,voltage_diff,logd
 prediction_data = data %>% select(distance,avg_current, packdcl,packccl)
 predictions <- predict(m3_s, newdata = prediction_data)
 
-regression_data = regression_data %>% mutate(predicted_vdiff = predictions)
+regression_data = regression_data %>% mutate(predicted_vdiff = predictions^2)
 
 # Plot Distance vs Voltage vs Prediction ########
 data_dvsv <- regression_data %>%
@@ -508,559 +508,40 @@ ggplot(data_dvsv, aes(x = avg_distance_km, y = voltage_diff)) +
   theme_minimal() +
   facet_wrap(~logdate, ncol = 2)
 
+ggsave(
+  filename = paste0("Code/General Plots/Predictions.png"),
+  plot = p
+)
+
 remove(data_dvsv)
-
-# RSM ###########
-
-getmode <- function(v) {
-  uniqv <- unique(v)
-  uniqv[which.max(tabulate(match(v, uniqv)))]
-}
-
-mode_DCL = getmode(data$packdcl)
-mode_CCL = getmode(data$packccl)
-
-## DCL ########
-grid = expand_grid(
-  distance = seq(from=0, to = max(data$distance), by=10),
-  packdcl = seq(from = min(data$packdcl), to = max(data$packdcl), by = 1),
-) %>%
-  mutate(packccl = 25, #This is the mode
-         avg_current = median(data$avg_current))
-
-# Make prediction
-prediction = predict(m3_s, newdata = grid, se.fit=TRUE)
-
-# If predicted error is negative, make it 0
-
-# Get the grid with confidence interval
-grid = grid %>% 
-  mutate(yhat = ifelse(prediction$fit <= -500, -499, prediction$fit),  # Replace negative `fit` with 0
-         upper_ci = yhat + prediction$se.fit * qnorm(0.975),
-         lower_ci = yhat - prediction$se.fit * qnorm(0.975))
-remove(prediction)
-
-# Add contour tolerance
-p <- ggplot() +
-  geom_tile(data = grid, mapping = aes(x = distance / 1000, y = packdcl, fill = yhat)) +
-  geom_contour_fill(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = packdcl, z = yhat),
-    binwidth = 1000,
-    color = "white",
-    size = 0.8
-  ) +
-  geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= packdcl, z = yhat), 
-                    skip = 0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
-  viridis::scale_fill_viridis(option = "plasma") +
-  labs(
-    title = "Predicted Voltage Error by Discharge Current Limit",
-    x = "Distance (km)",
-    y = "Discharge Current Limit",
-    fill = "Squared Error from Ideal Voltage"
-  ) +
-  theme_minimal()
-
-print(p)
-
-# Save the plot
-ggsave(
-  filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_DCL.png"),
-  plot = p
-)
-
-bestdcl = grid %>%
-  filter(yhat == min(yhat))
-bestdcl
-
-## CCL ########
-grid = expand_grid(
-  distance = seq(from=0, to = max(data$distance), by=10),
-  packccl = seq(from = min(data$packccl), to = max(data$packccl), by = .25),
-) %>%
-  mutate(packdcl = 30, #This is the mode
-         avg_current = median(data$avg_current))
-
-# Make prediction
-prediction = predict(m3_s, newdata = grid, se.fit=TRUE)
-
-# If predicted error is negative, make it 0
-
-# Get the grid with confidence interval
-grid = grid %>% 
-  mutate(yhat = ifelse(prediction$fit <= -500, -499, prediction$fit),  # Replace negative `fit` with 0
-         upper_ci = yhat + prediction$se.fit * qnorm(0.975),
-         lower_ci = yhat - prediction$se.fit * qnorm(0.975))
-remove(prediction)
-
-# Add contour tolerance
-p <- ggplot() +
-  geom_tile(data = grid, mapping = aes(x = distance / 1000, y = packccl, fill = yhat)) +
-  geom_contour_fill(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = packccl, z = yhat),
-    binwidth = 1000,
-    color = "white",
-    size = 0.8
-  ) +
-  geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= packccl, z = yhat), 
-                    skip = 0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
-  viridis::scale_fill_viridis(option = "plasma") +
-  labs(
-    title = "Predicted Voltage Error by Charge Current Limit",
-    x = "Distance (km)",
-    y = "Charge Current Limit",
-    fill = "Squared Error from Ideal Voltage"
-  ) +
-  theme_minimal()
-
-print(p)
-
-
-# Save the plot
-ggsave(
-  filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_CCL.png"),
-  plot = p
-)
-
-bestccl = grid %>%
-  filter(yhat == min(yhat))
-bestccl
-
-## Average Current ########
-grid = expand_grid(
-  distance = seq(from=0, to = max(data$distance), by=10),
-  avg_current = seq(from = min(data$avg_current), to = max(data$avg_current), by = 1),
-) %>%
-  mutate(packdcl = 30, #This is the mode
-         packccl = 25)
-
-# Make prediction
-prediction = predict(m3_s, newdata = grid, se.fit=TRUE)
-
-# If predicted error is negative, make it 0
-
-# Get the grid with confidence interval
-grid = grid %>% 
-  mutate(yhat = ifelse(prediction$fit <= -500, -499, prediction$fit),  # Replace negative `fit` with 0
-         upper_ci = yhat + prediction$se.fit * qnorm(0.975),
-         lower_ci = yhat - prediction$se.fit * qnorm(0.975))
-remove(prediction)
-
-# Add contour tolerance
-p <- ggplot() +
-  geom_tile(data = grid, mapping = aes(x = distance / 1000, y = avg_current, fill = yhat)) +
-  geom_contour_fill(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = yhat),
-    binwidth = 1000,
-    color = "white",
-    size = 0.8
-  ) +
-  geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= avg_current, z = yhat), 
-                    skip = 0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
-  viridis::scale_fill_viridis(option = "plasma") +
-  labs(
-    title = "Predicted Voltage Error by Average Current",
-    x = "Distance (km)",
-    y = "Average Current",
-    fill = "Squared Error from Ideal Voltage"
-  ) +
-  theme_minimal()
-
-print(p)
-
-# Save the plot
-ggsave(
-  filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_Average Current.png"),
-  plot = p
-)
-
-bestcurrent = grid %>%
-  filter(yhat == min(yhat))
-bestcurrent
-
-# avg_current, distance,packdcl,packccl
-
-# RSM - Upper ###########
-
-getmode <- function(v) {
-  uniqv <- unique(v)
-  uniqv[which.max(tabulate(match(v, uniqv)))]
-}
-
-mode_DCL = getmode(data$packdcl)
-mode_CCL = getmode(data$packccl)
-
-## DCL ########
-grid = expand_grid(
-  distance = seq(from=0, to = max(data$distance), by=10),
-  packdcl = seq(from = min(data$packdcl), to = max(data$packdcl), by = 1),
-) %>%
-  mutate(packccl = 25, #This is the mode
-         avg_current = median(data$avg_current))
-
-# Make prediction
-prediction = predict(m3_s, newdata = grid, se.fit=TRUE)
-
-# If predicted error is negative, make it 0
-
-# Get the grid with confidence interval
-grid = grid %>% 
-  mutate(yhat = ifelse(prediction$fit <= -500, -499, prediction$fit),  # Replace negative `fit` with 0
-         upper_ci = yhat + prediction$se.fit * qnorm(0.975),
-         lower_ci = yhat - prediction$se.fit * qnorm(0.975))
-remove(prediction)
-
-# Add contour tolerance
-p <- ggplot() +
-  geom_tile(data = grid, mapping = aes(x = distance / 1000, y = packdcl, fill = upper_ci)) +
-  geom_contour_fill(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = packdcl, z = upper_ci),
-    binwidth = 1000,
-    color = "white",
-    size = 0.8
-  ) +
-  geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= packdcl, z = upper_ci), 
-                    skip = 0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
-  viridis::scale_fill_viridis(option = "plasma") +
-  labs(
-    title = "Predicted Voltage Error by Discharge Current Limit",
-    x = "Distance (km)",
-    y = "Discharge Current Limit",
-    fill = "Squared Error from Ideal Voltage"
-  ) +
-  theme_minimal()
-
-print(p)
-
-# Save the plot
-ggsave(
-  filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_DCL_Upper.png"),
-  plot = p
-)
-
-bestdcl = grid %>%
-  filter(yhat == min(yhat))
-bestdcl
-
-## CCL ########
-grid = expand_grid(
-  distance = seq(from=0, to = max(data$distance), by=10),
-  packccl = seq(from = min(data$packccl), to = max(data$packccl), by = .25),
-) %>%
-  mutate(packdcl = 30, #This is the mode
-         avg_current = median(data$avg_current))
-
-# Make prediction
-prediction = predict(m3_s, newdata = grid, se.fit=TRUE)
-
-# If predicted error is negative, make it 0
-
-# Get the grid with confidence interval
-grid = grid %>% 
-  mutate(yhat = ifelse(prediction$fit <= -500, -499, prediction$fit),  # Replace negative `fit` with 0
-         upper_ci = yhat + prediction$se.fit * qnorm(0.975),
-         lower_ci = yhat - prediction$se.fit * qnorm(0.975))
-remove(prediction)
-
-# Add contour tolerance
-p <- ggplot() +
-  geom_tile(data = grid, mapping = aes(x = distance / 1000, y = packccl, fill = upper_ci)) +
-  geom_contour_fill(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = packccl, z = upper_ci),
-    binwidth = 1000,
-    color = "white",
-    size = 0.8
-  ) +
-  geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= packccl, z = upper_ci), 
-                    skip = 0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
-  viridis::scale_fill_viridis(option = "plasma") +
-  labs(
-    title = "Predicted Voltage Error by Charge Current Limit",
-    x = "Distance (km)",
-    y = "Charge Current Limit",
-    fill = "Squared Error from Ideal Voltage"
-  ) +
-  theme_minimal()
-
-print(p)
-
-
-# Save the plot
-ggsave(
-  filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_CCL_Upper.png"),
-  plot = p
-)
-
-bestccl = grid %>%
-  filter(yhat == min(yhat))
-bestccl
-
-## Average Current ########
-grid = expand_grid(
-  distance = seq(from=0, to = max(data$distance), by=10),
-  avg_current = seq(from = min(data$avg_current), to = max(data$avg_current), by = 1),
-) %>%
-  mutate(packdcl = 30, #This is the mode
-         packccl = 25)
-
-# Make prediction
-prediction = predict(m3_s, newdata = grid, se.fit=TRUE)
-
-# If predicted error is negative, make it 0
-
-# Get the grid with confidence interval
-grid = grid %>% 
-  mutate(yhat = ifelse(prediction$fit <= -500, -499, prediction$fit),  # Replace negative `fit` with 0
-         upper_ci = yhat + prediction$se.fit * qnorm(0.975),
-         lower_ci = yhat - prediction$se.fit * qnorm(0.975))
-remove(prediction)
-
-# Add contour tolerance
-p <- ggplot() +
-  geom_tile(data = grid, mapping = aes(x = distance / 1000, y = avg_current, fill = upper_ci)) +
-  geom_contour_fill(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = upper_ci),
-    binwidth = 1000,
-    color = "white",
-    size = 0.8
-  ) +
-  geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= avg_current, z = upper_ci), 
-                    skip = 0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
-  viridis::scale_fill_viridis(option = "plasma") +
-  labs(
-    title = "Predicted Voltage Error by Average Current",
-    x = "Distance (km)",
-    y = "Average Current",
-    fill = "Squared Error from Ideal Voltage"
-  ) +
-  theme_minimal()
-
-print(p)
-
-# Save the plot
-ggsave(
-  filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_Average Current_Upper.png"),
-  plot = p
-)
-
-bestcurrent = grid %>%
-  filter(yhat == min(yhat))
-bestcurrent
-
-# avg_current, distance,packdcl,packccl
-
-# RSM - Lower ###########
-
-getmode <- function(v) {
-  uniqv <- unique(v)
-  uniqv[which.max(tabulate(match(v, uniqv)))]
-}
-
-mode_DCL = getmode(data$packdcl)
-mode_CCL = getmode(data$packccl)
-
-## DCL ########
-grid = expand_grid(
-  distance = seq(from=0, to = max(data$distance), by=10),
-  packdcl = seq(from = min(data$packdcl), to = max(data$packdcl), by = 1),
-) %>%
-  mutate(packccl = 25, #This is the mode
-         avg_current = median(data$avg_current))
-
-# Make prediction
-prediction = predict(m3_s, newdata = grid, se.fit=TRUE)
-
-# If predicted error is negative, make it 0
-
-# Get the grid with confidence interval
-grid = grid %>% 
-  mutate(yhat = ifelse(prediction$fit <= -500, -499, prediction$fit),  # Replace negative `fit` with 0
-         upper_ci = yhat + prediction$se.fit * qnorm(0.975),
-         lower_ci = yhat - prediction$se.fit * qnorm(0.975))
-remove(prediction)
-
-# Add contour tolerance
-p <- ggplot() +
-  geom_tile(data = grid, mapping = aes(x = distance / 1000, y = packdcl, fill = lower_ci)) +
-  geom_contour_fill(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = packdcl, z = lower_ci),
-    binwidth = 1000,
-    color = "white",
-    size = 0.8
-  ) +
-  geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= packdcl, z = lower_ci), 
-                    skip = 0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
-  viridis::scale_fill_viridis(option = "plasma") +
-  labs(
-    title = "Predicted Voltage Error by Discharge Current Limit",
-    x = "Distance (km)",
-    y = "Discharge Current Limit",
-    fill = "Squared Error from Ideal Voltage"
-  ) +
-  theme_minimal()
-
-print(p)
-
-# Save the plot
-ggsave(
-  filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_DCL_Lower.png"),
-  plot = p
-)
-
-bestdcl = grid %>%
-  filter(yhat == min(yhat))
-bestdcl
-
-## CCL ########
-grid = expand_grid(
-  distance = seq(from=0, to = max(data$distance), by=10),
-  packccl = seq(from = min(data$packccl), to = max(data$packccl), by = .25),
-) %>%
-  mutate(packdcl = 30, #This is the mode
-         avg_current = median(data$avg_current))
-
-# Make prediction
-prediction = predict(m3_s, newdata = grid, se.fit=TRUE)
-
-# If predicted error is negative, make it 0
-
-# Get the grid with confidence interval
-grid = grid %>% 
-  mutate(yhat = ifelse(prediction$fit <= -500, -499, prediction$fit),  # Replace negative `fit` with 0
-         upper_ci = yhat + prediction$se.fit * qnorm(0.975),
-         lower_ci = yhat - prediction$se.fit * qnorm(0.975))
-remove(prediction)
-
-# Add contour tolerance
-p <- ggplot() +
-  geom_tile(data = grid, mapping = aes(x = distance / 1000, y = packccl, fill = lower_ci)) +
-  geom_contour_fill(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = packccl, z = lower_ci),
-    binwidth = 1000,
-    color = "white",
-    size = 0.8
-  ) +
-  geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= packccl, z = lower_ci), 
-                    skip = 0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
-  viridis::scale_fill_viridis(option = "plasma") +
-  labs(
-    title = "Predicted Voltage Error by Charge Current Limit",
-    x = "Distance (km)",
-    y = "Charge Current Limit",
-    fill = "Squared Error from Ideal Voltage"
-  ) +
-  theme_minimal()
-
-print(p)
-
-
-# Save the plot
-ggsave(
-  filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_CCL_Lower.png"),
-  plot = p
-)
-
-bestccl = grid %>%
-  filter(yhat == min(yhat))
-bestccl
-
-## Average Current ########
-grid = expand_grid(
-  distance = seq(from=0, to = max(data$distance), by=10),
-  avg_current = seq(from = min(data$avg_current), to = max(data$avg_current), by = 1),
-) %>%
-  mutate(packdcl = 30, #This is the mode
-         packccl = 25)
-
-# Make prediction
-prediction = predict(m3_s, newdata = grid, se.fit=TRUE)
-
-# If predicted error is negative, make it 0
-
-# Get the grid with confidence interval
-grid = grid %>% 
-  mutate(yhat = ifelse(prediction$fit <= -500, -499, prediction$fit),  # Replace negative `fit` with 0
-         upper_ci = yhat + prediction$se.fit * qnorm(0.975),
-         lower_ci = yhat - prediction$se.fit * qnorm(0.975))
-remove(prediction)
-
-# Add contour tolerance
-p <- ggplot() +
-  geom_tile(data = grid, mapping = aes(x = distance / 1000, y = avg_current, fill = lower_ci)) +
-  geom_contour_fill(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = lower_ci),
-    binwidth = 1000,
-    color = "white",
-    size = 0.8
-  ) +
-  geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= avg_current, z = lower_ci), 
-                    skip = 0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
-  viridis::scale_fill_viridis(option = "plasma") +
-  labs(
-    title = "Predicted Voltage Error by Average Current",
-    x = "Distance (km)",
-    y = "Average Current",
-    fill = "Squared Error from Ideal Voltage"
-  ) +
-  theme_minimal()
-
-print(p)
-
-# Save the plot
-ggsave(
-  filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_Average Current_Lower.png"),
-  plot = p
-)
-
-bestcurrent = grid %>%
-  filter(yhat == min(yhat))
-bestcurrent
-
-# avg_current, distance,packdcl,packccl
 
 
 # RSM - With CIs ###########
 
-getmode <- function(v) {
-  uniqv <- unique(v)
-  uniqv[which.max(tabulate(match(v, uniqv)))]
-}
-
-mode_DCL = getmode(data$packdcl)
-mode_CCL = getmode(data$packccl)
-
 ## DCL ########
 grid = expand_grid(
   distance = seq(from=0, to = max(data$distance), by=10),
-  packdcl = seq(from = min(data$packdcl), to = max(data$packdcl), by = 1),
+  packdcl = seq(from = 15, to = max(data$packdcl), by = 1),
 ) %>%
   mutate(packccl = 25, #This is the mode
          avg_current = median(data$avg_current))
 
-# Make prediction
-prediction = predict(m3_s, newdata = grid, se.fit=TRUE)
-
-# If predicted error is negative, make it 0
+# Make prediction with confidence interval
+prediction = predict(m3_s, newdata = grid, interval = "confidence", level = 0.95)
 
 # Get the grid with confidence interval
 grid = grid %>% 
-  mutate(yhat = ifelse(prediction$fit <= -500, -499, prediction$fit),  # Replace negative `fit` with 0
-         upper_ci = yhat + prediction$se.fit * qnorm(0.975),
-         lower_ci = yhat - prediction$se.fit * qnorm(0.975))
+  mutate(
+    yhat = prediction[, "fit"]^2,
+    lower_ci = prediction[, "lwr"]^2,
+    upper_ci = prediction[, "upr"]^2
+  )
 remove(prediction)
 
 # Add contour tolerance
 p <- ggplot() +
   geom_tile(data = grid, mapping = aes(x = distance / 1000, y = packdcl, fill = yhat)) +
-  geom_contour_fill(
+  geom_contour(
     data = grid,
     mapping = aes(x = distance / 1000, y = packdcl, z = yhat),
     binwidth = 1000,
@@ -1077,6 +558,13 @@ p <- ggplot() +
   ) +
   geom_contour(
     data = grid,
+    mapping = aes(x = distance / 1000, y = packdcl, z = yhat),
+    breaks = c(.01),
+    color = "white",
+    size = 1
+  ) + 
+  geom_contour(
+    data = grid,
     mapping = aes(x = distance / 1000, y = packdcl, z = upper_ci),
     binwidth = 1000,
     color = "grey",
@@ -1084,7 +572,7 @@ p <- ggplot() +
     linetype = "dashed"
   ) +
   geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= packdcl, z = yhat), 
-                    skip = 0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
+                    skip = 1, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
   viridis::scale_fill_viridis(option = "plasma") +
   labs(
     title = "Predicted Voltage Error by Discharge Current Limit - With 95% Confidence Intervals",
@@ -1114,32 +602,31 @@ grid = expand_grid(
   mutate(packdcl = 30, #This is the mode
          avg_current = median(data$avg_current))
 
-# Make prediction
-prediction = predict(m3_s, newdata = grid, se.fit=TRUE)
-
-# If predicted error is negative, make it 0
+# Make prediction with confidence interval
+prediction = predict(m3_s, newdata = grid, interval = "confidence", level = 0.95)
 
 # Get the grid with confidence interval
 grid = grid %>% 
-  mutate(yhat = ifelse(prediction$fit <= -500, -499, prediction$fit),  # Replace negative `fit` with 0
-         upper_ci = yhat + prediction$se.fit * qnorm(0.975),
-         lower_ci = yhat - prediction$se.fit * qnorm(0.975))
-remove(prediction)
+  mutate(
+    yhat = prediction[, "fit"]^2,
+    lower_ci = prediction[, "lwr"]^2,
+    upper_ci = prediction[, "upr"]^2
+  )
 
 # Add contour tolerance
 p <- ggplot() +
   geom_tile(data = grid, mapping = aes(x = distance / 1000, y = packccl, fill = yhat)) +
-  geom_contour_fill(
+  geom_contour(
     data = grid,
     mapping = aes(x = distance / 1000, y = packccl, z = yhat),
-    binwidth = 1000,
+    binwidth = 500,
     color = "white",
     size = 0.8
-  ) +
+  )  +
   geom_contour(
     data = grid,
     mapping = aes(x = distance / 1000, y = packccl, z = lower_ci),
-    binwidth = 1000,
+    binwidth = 500,
     color = "grey",
     size = 0.5,
     linetype = "dashed"
@@ -1147,13 +634,20 @@ p <- ggplot() +
   geom_contour(
     data = grid,
     mapping = aes(x = distance / 1000, y = packccl, z = upper_ci),
-    binwidth = 1000,
+    binwidth = 500,
     color = "grey",
     size = 0.5,
     linetype = "dashed"
   ) +
   geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= packccl, z = yhat), 
-                    skip = 0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
+                    skip =0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
+  geom_contour(
+    data = grid,
+    mapping = aes(x = distance / 1000, y = packccl, z = yhat),
+    breaks = c(.01),
+    color = "white",
+    size = 1
+  ) +
   viridis::scale_fill_viridis(option = "plasma") +
   labs(
     title = "Predicted Voltage Error by Charge Current Limit - With 95% Confidence Intervals",
@@ -1184,22 +678,21 @@ grid = expand_grid(
   mutate(packdcl = 30, #This is the mode
          packccl = 25)
 
-# Make prediction
-prediction = predict(m3_s, newdata = grid, se.fit=TRUE)
-
-# If predicted error is negative, make it 0
+# Make prediction with confidence interval
+prediction = predict(m3_s, newdata = grid, interval = "confidence", level = 0.95)
 
 # Get the grid with confidence interval
 grid = grid %>% 
-  mutate(yhat = ifelse(prediction$fit <= -500, -499, prediction$fit),  # Replace negative `fit` with 0
-         upper_ci = yhat + prediction$se.fit * qnorm(0.975),
-         lower_ci = yhat - prediction$se.fit * qnorm(0.975))
-remove(prediction)
+  mutate(
+    yhat = prediction[, "fit"]^2,
+    lower_ci = prediction[, "lwr"]^2,
+    upper_ci = prediction[, "upr"]^2
+  )
 
 # Add contour tolerance
 p <- ggplot() +
   geom_tile(data = grid, mapping = aes(x = distance / 1000, y = avg_current, fill = yhat)) +
-  geom_contour_fill(
+  geom_contour(
     data = grid,
     mapping = aes(x = distance / 1000, y = avg_current, z = yhat),
     binwidth = 1000,
@@ -1224,6 +717,13 @@ p <- ggplot() +
   ) +
   geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= avg_current, z = yhat), 
                     skip = 0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
+  geom_contour(
+    data = grid,
+    mapping = aes(x = distance / 1000, y = avg_current, z = yhat),
+    breaks = c(.01),
+    color = "white",
+    size = 1
+  ) +
   viridis::scale_fill_viridis(option = "plasma") +
   labs(
     title = "Predicted Voltage Error by Average Current - With 95% Confidence Intervals",
@@ -1243,5 +743,159 @@ ggsave(
 
 bestcurrent = grid %>%
   filter(yhat == min(yhat))
+
+# Parameter Optimization############
+
+# bestcurrent, bestdcl, bestccl is all parameter combinations where error is minimized
+# We will find the parameters to get us the closest to error of 0!
+
+bestcurrent = bestcurrent$avg_current
 bestcurrent
+# 20.19853
+# But, many currents seem to get an error close to 0
+
+bestdcl = bestdcl$packdcl
+bestdcl
+# 33
+
+bestccl = bestccl$packccl
+bestccl
+# 29
+
+## RSM with optimal DCL CCL
+## Average Current ########
+grid = expand_grid(
+  distance = seq(from=0, to = max(data$distance), by=10),
+  avg_current = seq(from = min(data$avg_current), to = max(data$avg_current), by = 1),
+) %>%
+  mutate(packdcl = 33, #This is the mode
+         packccl = 29)
+
+# Make prediction with confidence interval
+prediction = predict(m3_s, newdata = grid, interval = "confidence", level = 0.95)
+
+# Get the grid with confidence interval
+grid = grid %>% 
+  mutate(
+    yhat = prediction[, "fit"]^2,
+    lower_ci = prediction[, "lwr"]^2,
+    upper_ci = prediction[, "upr"]^2
+  )
+
+# Add contour tolerance
+p <- ggplot() +
+  geom_tile(data = grid, mapping = aes(x = distance / 1000, y = avg_current, fill = yhat)) +
+  geom_contour(
+    data = grid,
+    mapping = aes(x = distance / 1000, y = avg_current, z = yhat),
+    binwidth = 1000,
+    color = "white",
+    size = 0.8
+  ) +
+  geom_contour(
+    data = grid,
+    mapping = aes(x = distance / 1000, y = avg_current, z = lower_ci),
+    binwidth = 1000,
+    color = "grey",
+    size = 0.5,
+    linetype = "dashed"
+  ) +
+  geom_contour(
+    data = grid,
+    mapping = aes(x = distance / 1000, y = avg_current, z = upper_ci),
+    binwidth = 1000,
+    color = "grey",
+    size = 0.5,
+    linetype = "dashed"
+  ) +
+  geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= avg_current, z = yhat), 
+                    skip = 0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
+  geom_contour(
+    data = grid,
+    mapping = aes(x = distance / 1000, y = avg_current, z = yhat),
+    breaks = c(.01),
+    color = "white",
+    size = 1
+  ) +
+  viridis::scale_fill_viridis(option = "plasma") +
+  labs(
+    title = "Predicted Voltage Error by Average Current - With 95% Confidence Intervals",
+    x = "Distance (km)",
+    y = "Average Current",
+    fill = "Squared Error from Ideal Voltage"
+  ) +
+  theme_minimal()
+
+print(p)
+
+# Save the plot
+ggsave(
+  filename = paste0("Code/RSM Plots/RSM With Optimal DCL CCL.png"),
+  plot = p
+)
+
+# Get best currents at each distance
+best_current_5000 = grid %>% filter(distance==5000) %>% filter(yhat == min(yhat))
+best_current_10000 = grid %>% filter(distance==10000) %>% filter(yhat == min(yhat))
+best_current_15000 = grid %>% filter(distance==15000) %>% filter(yhat == min(yhat))
+opt_currents = c(best_current_5000$avg_current,best_current_10000$avg_current,best_current_15000$avg_current)
+
+## Optimal Prediction ######
+
+grid_pred = expand_grid(
+  distance = seq(from=5000, to = 15000, by=5000)
+) %>%
+  mutate(packdcl = 33, #This is the optimal
+         packccl = 29, # This is the optimal
+         avg_current = opt_currents) # Current seems to be the best at the maximum level as seeen in the RSM
+
+# Make prediction with confidence interval
+prediction = predict(m3_s, newdata = grid, interval = "confidence", level = 0.95)
+
+# Get the grid with confidence interval
+grid_pred = grid_pred %>% 
+  mutate(
+    yhat = prediction[, "fit"]^2,
+    lower_ci = prediction[, "lwr"]^2,
+    upper_ci = prediction[, "upr"]^2
+  )
+grid_pred
+
+# A tibble: 3 × 7
+# distance packdcl packccl avg_current    yhat lower_ci upper_ci
+# <dbl>   <dbl>   <dbl>       <dbl>   <dbl>    <dbl>    <dbl>
+# 1     5000      33      29        13.2 0.00549  0.00920   0.0596
+# 2    10000      33      29        22.2 0.243    0.457     0.0961
+# 3    15000      33      29        38.2 0.111    0.0240    0.675 
+
+## Optimal Current varies by distance #########
+# Calculate optimal currents for a range of distances
+distances <- seq(0, 21999, by = 1000)  # Example distances
+optimal_currents <- c()
+
+for (d in distances) {
+  best_current <- grid %>% 
+    filter(distance == d) %>% 
+    filter(yhat == min(yhat)) %>% 
+    pull(avg_current)
+  optimal_currents <- c(optimal_currents, best_current)
+}
+
+# Create a data frame with distances and optimal currents
+optimal_data <- tibble(
+  distance = distances,
+  optimal_current = optimal_currents
+)
+
+# Plot distance vs optimal current
+ggplot(optimal_data, aes(x = distance, y = optimal_current)) +
+  geom_line(color = "blue", size = 1) +
+  labs(
+    title = "Distance vs Optimal Current",
+    x = "Distance (m)",
+    y = "Optimal Current (A)"
+  ) +
+  theme_minimal()
+
+
 
