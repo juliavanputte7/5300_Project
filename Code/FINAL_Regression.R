@@ -298,6 +298,9 @@ p = ggplot(data = data, aes(x = inv_commandtq, y = bms_dccurrent)) +
 
 print(p)
 ggsave(
+  dpi = 300,
+  width = 7,
+  height = 5,
   filename = paste0("Code/General Plots/Torque v Current.png"),
   plot = p
 )
@@ -321,6 +324,7 @@ m0 = data %>%
       gforcelong + 
       gforcelat +
       avg_current +
+      groundspeed + 
       inv_commandtq
   )
 glance(m0)
@@ -773,59 +777,105 @@ grid = grid %>%
   )
 
 # Add contour tolerance
-p <- ggplot() +
+p_curr <- ggplot() +
   geom_tile(data = grid, mapping = aes(x = distance / 1000, y = avg_current, fill = yhat)) +
+  
+  # Main contours
   geom_contour(
     data = grid,
     mapping = aes(x = distance / 1000, y = avg_current, z = yhat),
-    binwidth = 1000,
-    color = "white",
-    size = 0.8
+    color = "white", linetype = "solid",
+    binwidth = 500,
+    size = 0.5
   ) +
+  
+  # Lower CI contours
   geom_contour(
     data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = lower_ci),
-    binwidth = 1000,
-    color = "grey",
-    size = 0.5,
-    linetype = "dashed"
+    mapping = aes(x = distance / 1000, y = avg_current, z = lower_ci, color = "95% CI", linetype = "95% CI"),
+    binwidth = 500,
+    size = 0.5
   ) +
+  
+  # Upper CI contours
   geom_contour(
     data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = upper_ci),
-    binwidth = 1000,
-    color = "grey",
-    size = 0.5,
-    linetype = "dashed"
+    mapping = aes(x = distance / 1000, y = avg_current, z = upper_ci, color = "95% CI", linetype = "95% CI"),
+    binwidth = 500,
+    size = 0.5
   ) +
-  geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= avg_current, z = yhat), 
-                    skip = 0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
+  
+  # Smallest Error line
   geom_contour(
     data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = yhat),
+    mapping = aes(x = distance / 1000, y = avg_current, z = yhat, color = "Smallest Error", linetype = "Smallest Error"),
     breaks = c(.01),
-    color = "white",
     size = 1
   ) +
+  
+  # Add text labels for contours
+  geom_text_contour(
+    data = grid,
+    mapping = aes(x = distance / 1000, y = avg_current, z = yhat),
+    skip = 0,
+    stroke.color = "white",
+    stroke = 0.2,
+    label.placer = label_placer_n(1)
+  ) +
+  
+  # Color fill
   viridis::scale_fill_viridis(option = "plasma") +
+  
+  # Manually add lines to legend
+  scale_linetype_manual(
+    name = " ",
+    values = c("95% CI" = "dashed", "Smallest Error" = "solid")
+  ) +
+  scale_color_manual(
+    name = " ",
+    values = c("95% CI" = "grey", "Smallest Error" = "green2")
+  ) +
+  
+  # Labels and themes
   labs(
-    title = "Predicted Voltage Error by Average Current - With 95% Confidence Intervals",
+    title = "RSM for Average Current",
+    subtitle = "Predicted Voltage Error by 30s Avg Current",
     x = "Distance (km)",
     y = "Average Current",
-    fill = "Squared Error from Ideal Voltage"
+    fill = "Squared Error \n from Ideal \n Voltage"
   ) +
   theme_minimal()
 
-print(p)
+print(p_curr)
 
 # Save the plot
 ggsave(
+  dpi = 300,
+  width = 7,
+  height = 5,
   filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_Average Current_WithCIs.png"),
-  plot = p
+  plot = p_curr
 )
 
 bestcurrent = grid %>%
   filter(yhat == min(yhat))
+
+# POSTER PLOT RSM ##############
+install.packages("ggpubr")
+library(ggpubr)
+summaryp = ggpubr::ggarrange(plotlist = list(p_DCL,p_CCL,p_curr), 
+                             common.legend = TRUE,legend = "right",
+                             nrow=1,ncol=3 )
+
+print(summaryp)
+
+ggsave(
+  dpi = 300,
+  width = 14,
+  height = 6,
+  filename = paste0("Code/RSM Plots/POSTER_RSM.png"),
+  plot = summaryp
+)
 
 # Parameter Optimization############
 
@@ -866,55 +916,84 @@ grid = grid %>%
   )
 
 # Add contour tolerance
-p <- ggplot() +
+p_summary <- ggplot() +
   geom_tile(data = grid, mapping = aes(x = distance / 1000, y = avg_current, fill = yhat)) +
+  
+  # Main contours
   geom_contour(
     data = grid,
     mapping = aes(x = distance / 1000, y = avg_current, z = yhat),
-    binwidth = 1000,
-    color = "white",
-    size = 0.8
+    color = "white", linetype = "solid",
+    binwidth = 500,
+    size = 0.5
   ) +
+  
+  # Lower CI contours
   geom_contour(
     data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = lower_ci),
-    binwidth = 1000,
-    color = "grey",
-    size = 0.5,
-    linetype = "dashed"
+    mapping = aes(x = distance / 1000, y = avg_current, z = lower_ci, color = "95% CI", linetype = "95% CI"),
+    binwidth = 500,
+    size = 0.5
   ) +
+  
+  # Upper CI contours
   geom_contour(
     data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = upper_ci),
-    binwidth = 1000,
-    color = "grey",
-    size = 0.5,
-    linetype = "dashed"
+    mapping = aes(x = distance / 1000, y = avg_current, z = upper_ci, color = "95% CI", linetype = "95% CI"),
+    binwidth = 500,
+    size = 0.5
   ) +
-  geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= avg_current, z = yhat), 
-                    skip = 0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
+  
+  # Smallest Error line
   geom_contour(
     data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = yhat),
+    mapping = aes(x = distance / 1000, y = avg_current, z = yhat, color = "Smallest Error", linetype = "Smallest Error"),
     breaks = c(.01),
-    color = "white",
     size = 1
   ) +
+  
+  # Add text labels for contours
+  geom_text_contour(
+    data = grid,
+    mapping = aes(x = distance / 1000, y = avg_current, z = yhat),
+    skip = 0,
+    stroke.color = "white",
+    stroke = 0.2,
+    label.placer = label_placer_n(1)
+  ) +
+  
+  # Color fill
   viridis::scale_fill_viridis(option = "plasma") +
+  
+  # Manually add lines to legend
+  scale_linetype_manual(
+    name = " ",
+    values = c("95% CI" = "dashed", "Smallest Error" = "solid")
+  ) +
+  scale_color_manual(
+    name = " ",
+    values = c("95% CI" = "grey", "Smallest Error" = "green2")
+  ) +
+  
+  # Labels and themes
   labs(
-    title = "Predicted Voltage Error by Average Current - With 95% Confidence Intervals",
+    title = "RSM for Average Current, With DCL and CCL Optimized",
+    subtitle = "DCL = 33, CCL = 29",
     x = "Distance (km)",
     y = "Average Current",
-    fill = "Squared Error from Ideal Voltage"
+    fill = "Squared Error \n from Ideal \n Voltage"
   ) +
   theme_minimal()
 
-print(p)
+print(p_summary)
 
 # Save the plot
 ggsave(
+  dpi = 300,
+  width = 7,
+  height = 5,
   filename = paste0("Code/RSM Plots/RSM With Optimal DCL CCL.png"),
-  plot = p
+  plot = p_summary
 )
 
 # Get best currents at each distance
@@ -933,7 +1012,7 @@ grid_pred = expand_grid(
          avg_current = opt_currents) # Current seems to be the best at the maximum level as seeen in the RSM
 
 # Make prediction with confidence interval
-prediction = predict(m3_s, newdata = grid, interval = "confidence", level = 0.95)
+prediction = predict(m3_s, newdata = grid_pred, interval = "confidence", level = 0.95)
 
 # Get the grid with confidence interval
 grid_pred = grid_pred %>% 
@@ -971,14 +1050,22 @@ optimal_data <- tibble(
 )
 
 # Plot distance vs optimal current
-ggplot(optimal_data, aes(x = distance, y = optimal_current)) +
-  geom_line(color = "blue", size = 1) +
+opt_curr = ggplot(optimal_data, aes(x = distance, y = optimal_current)) +
+  geom_line(color = "#b31b1b", size = 1) +
   labs(
-    title = "Distance vs Optimal Current",
+    title = "Distance vs Optimal Current to Minimize Error",
+    subtitle = "DCL = 33, CCL = 29",
     x = "Distance (m)",
     y = "Optimal Current (A)"
   ) +
   theme_minimal()
 
-
-
+print(opt_curr)
+# Save the plot
+ggsave(
+  dpi = 300,
+  width = 5,
+  height = 5,
+  filename = paste0("Code/RSM Plots/Opt_Currents.png"),
+  plot = opt_curr
+)
