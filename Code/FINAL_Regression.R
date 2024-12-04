@@ -719,11 +719,11 @@ p_CCL <- ggplot() +
   
   # Manually add lines to legend
   scale_linetype_manual(
-    name = "Lines",
+    name = " ",
     values = c("95% CI" = "dashed", "Smallest Error" = "solid")
   ) +
   scale_color_manual(
-    name = "Lines",
+    name = " ",
     values = c("95% CI" = "grey", "Smallest Error" = "green2")
   ) +
   
