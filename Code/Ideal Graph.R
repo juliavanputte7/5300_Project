@@ -27,7 +27,7 @@ data_poor_utilization <- data.frame(distance = c(0,2,4,6,8,10,12,13,14,16,17,18,
 # Combine all data frames
 data <- rbind(data_ideal, data_no_finish, data_poor_utilization)
 
-ggplot(data) +
+p = ggplot(data) +
   geom_line(aes(x = distance, y = SOC, color = Type, linetype = Type), size = 1) +
   scale_color_manual(values = c("Ideal" = "forestgreen", 
                                 "No Finish" = "firebrick", 
