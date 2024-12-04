@@ -92,9 +92,10 @@ p = ggplot(data_dvsv, aes(x = avg_distance_km, y = avg_bmsdcvoltage)) +
 
 print(p)
 
-ggsave(
-  filename = paste0("Code/General Plots/Distance vs Voltage.png"),
-  plot = p
+ggsave( dpi = 300,
+        filename = paste0("Code/General Plots/Distance vs Voltage.png"),
+        plot = p,
+        width = 7, height = 5
 )
 
 remove(data_dvsv)
@@ -122,8 +123,10 @@ p = ggplot(data_dvsc, aes(x = avg_distance_km, y = avg_current)) +
 print(p)
 
 ggsave(
+  dpi = 300,
   filename = paste0("Code/General Plots/Distance vs Current.png"),
-  plot = p
+  plot = p,
+  width = 7, height = 5
 )
 
 remove(data_dvsc)
@@ -151,7 +154,7 @@ p = ggplot(data_dvsc, aes(x = avg_soc, y = avg_bmsdcvoltage)) +
 
 print(p)
 
-ggsave(
+ggsave(dpi = 300, width=7,height=5,
   filename = paste0("Code/General Plots/SOC Voltage Curves.png"),
   plot = p
 )
@@ -167,13 +170,13 @@ p = ggplot(data, aes(x = distance_km, y = idealv)) +
   # Adding label for the ideal SOC curve using annotate()
   annotate(
     "text", 
-    x = max(data$distance_km) * 0.85,  # Adjust x position
-    y = min(data$avg_bmsdcvoltage) * 1.15, # Adjust y position
-    label = "Ideal Voltage Curve", 
+    x = 18.75,  # Adjust x position
+    y = 326.5, # Adjust y position
+    label = "Ideal Voltage", 
     color = "blue", 
     size = 5, 
     hjust = 0,
-    angle=310
+    angle=303
   ) +
   # Plot SOC curves for each unique date
   geom_line(
@@ -185,7 +188,7 @@ p = ggplot(data, aes(x = distance_km, y = idealv)) +
   labs(
     x = "Distance (km)",
     y = "Voltage (V)",
-    title = "Voltage Curves for 8 Races vs Ideal",
+    title = "Ideal vs Actual Voltage for 8 Races",
     color = "Race Date"
   ) +
   # Legend title
@@ -196,6 +199,9 @@ p = ggplot(data, aes(x = distance_km, y = idealv)) +
 print(p)
 
 ggsave(
+  dpi = 300,
+  width = 7,
+  height = 5,
   filename = paste0("Code/General Plots/Ideal Voltage.png"),
   plot = p
 )
@@ -224,6 +230,9 @@ p = ggplot(data, aes(x = distance_km, y = voltage_diff)) +
 print(p)
 
 ggsave(
+  dpi = 300,
+  width = 7,
+  height = 5,
   filename = paste0("Code/General Plots/Voltage Difference.png"),
   plot = p
 )
@@ -462,7 +471,7 @@ for (var in variables) {
   
   # Create the plot
   p <- ggplot(regression_data, aes(x = regression_data[[var]], y = voltage_diff)) +
-    geom_point(color = "blue", alpha = 0.5, size = 0.5) 
+    geom_point(color = "blue", alpha = 0.5, size = 0.5) +
     labs(
       x = var_name,
       y = "Squared Error from Ideal Voltage",
@@ -473,7 +482,10 @@ for (var in variables) {
   # Save the plot
   ggsave(
     filename = paste0("Code/Regression Plots/Ideal_Voltage_Diff_vs_", gsub(" ", "_", var), ".png"),
-    plot = p
+    plot = p,
+    dpi = 300,
+    width = 7,
+    height = 5
   )
 }
 
@@ -510,7 +522,10 @@ ggplot(data_dvsv, aes(x = avg_distance_km, y = voltage_diff)) +
 
 ggsave(
   filename = paste0("Code/General Plots/Predictions.png"),
-  plot = p
+  plot = p,
+  dpi = 300,
+  width = 7,
+  height = 5
 )
 
 remove(data_dvsv)
@@ -538,9 +553,20 @@ grid = grid %>%
   )
 remove(prediction)
 
-# Add contour tolerance
-p <- ggplot() +
+library(ggplot2)
+library(viridis)
+
+# Add a column to the dataset to define line type for each contour
+grid <- grid %>%
+  mutate(line_type = case_when(
+    between(yhat, 0.009, 0.011) ~ "Smallest Error",
+    TRUE ~ "95% CI"
+  ))
+
+p_DCL <- ggplot() +
   geom_tile(data = grid, mapping = aes(x = distance / 1000, y = packdcl, fill = yhat)) +
+  
+  # Main contours
   geom_contour(
     data = grid,
     mapping = aes(x = distance / 1000, y = packdcl, z = yhat),
@@ -548,46 +574,75 @@ p <- ggplot() +
     color = "white",
     size = 0.5
   ) +
+  
+  # Lower CI contours
   geom_contour(
     data = grid,
-    mapping = aes(x = distance / 1000, y = packdcl, z = lower_ci),
-    binwidth = 1000,
+    mapping = aes(x = distance / 1000, y = packdcl, z = lower_ci, linetype = "95% CI"),
     color = "grey",
-    size = 0.5,
-    linetype = "dashed"
+    size = 0.5
   ) +
+  
+  # Smallest error line
   geom_contour(
     data = grid,
-    mapping = aes(x = distance / 1000, y = packdcl, z = yhat),
+    mapping = aes(x = distance / 1000, y = packdcl, z = yhat, linetype = "Smallest Error"),
     breaks = c(.01),
-    color = "white",
+    color = "green2",
     size = 1
-  ) + 
+  ) +
+  
+  # Upper CI contours
   geom_contour(
     data = grid,
-    mapping = aes(x = distance / 1000, y = packdcl, z = upper_ci),
-    binwidth = 1000,
+    mapping = aes(x = distance / 1000, y = packdcl, z = upper_ci, linetype = "95% CI"),
     color = "grey",
-    size = 0.5,
-    linetype = "dashed"
+    size = 0.5
   ) +
-  geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= packdcl, z = yhat), 
-                    skip = 1, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
+  
+  # Add text labels for contours
+  geom_text_contour(
+    data = grid, 
+    mapping = aes(x = distance / 1000, y = packdcl, z = yhat), 
+    skip = 1, 
+    stroke.color = "white", 
+    stroke = 0.2, 
+    label.placer = label_placer_n(1)
+  ) +
+  
+  # Color fill
   viridis::scale_fill_viridis(option = "plasma") +
+  
+  # Manually add lines to legend
+  scale_linetype_manual(
+    name = " ",
+    values = c("Smallest Error" = "solid", "95% CI" = "dashed")
+  ) +
+  scale_color_manual(
+    name = " ",
+    values = c("Smallest Error" = "green2", "95% CI" = "grey")
+  ) +
+  
+  # Labels and themes
   labs(
-    title = "Predicted Voltage Error by Discharge Current Limit - With 95% Confidence Intervals",
+    title = "RSM for DCL",
+    subtitle = "Predicted Voltage Error by Discharge Current Limit",
     x = "Distance (km)",
     y = "Discharge Current Limit",
-    fill = "Squared Error from Ideal Voltage"
+    fill = "Squared Error \n from Ideal \n Voltage"
   ) +
   theme_minimal()
 
-print(p)
+print(p_DCL)
+
 
 # Save the plot
 ggsave(
   filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_DCL_with_CIs.png"),
-  plot = p
+  plot = p_DCL,
+  dpi = 300,
+  width = 7,
+  height = 5
 )
 
 bestdcl = grid %>%
@@ -613,57 +668,85 @@ grid = grid %>%
     upper_ci = prediction[, "upr"]^2
   )
 
-# Add contour tolerance
-p <- ggplot() +
+p_CCL <- ggplot() +
   geom_tile(data = grid, mapping = aes(x = distance / 1000, y = packccl, fill = yhat)) +
+  
+  # Main contours
   geom_contour(
     data = grid,
     mapping = aes(x = distance / 1000, y = packccl, z = yhat),
+    color = "white", linetype = "solid",
     binwidth = 500,
-    color = "white",
-    size = 0.8
-  )  +
-  geom_contour(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = packccl, z = lower_ci),
-    binwidth = 500,
-    color = "grey",
-    size = 0.5,
-    linetype = "dashed"
+    size = 0.5
   ) +
+  
+  # Lower CI contours
   geom_contour(
     data = grid,
-    mapping = aes(x = distance / 1000, y = packccl, z = upper_ci),
+    mapping = aes(x = distance / 1000, y = packccl, z = lower_ci, color = "95% CI", linetype = "95% CI"),
     binwidth = 500,
-    color = "grey",
-    size = 0.5,
-    linetype = "dashed"
+    size = 0.5
   ) +
-  geom_text_contour(data = grid, mapping = aes(x = distance/1000, y= packccl, z = yhat), 
-                    skip =0, stroke.color = "white", stroke = 0.2, label.placer = label_placer_n(1))+
+  
+  # Upper CI contours
   geom_contour(
     data = grid,
-    mapping = aes(x = distance / 1000, y = packccl, z = yhat),
+    mapping = aes(x = distance / 1000, y = packccl, z = upper_ci, color = "95% CI", linetype = "95% CI"),
+    binwidth = 500,
+    size = 0.5
+  ) +
+  
+  # Smallest Error line
+  geom_contour(
+    data = grid,
+    mapping = aes(x = distance / 1000, y = packccl, z = yhat, color = "Smallest Error", linetype = "Smallest Error"),
     breaks = c(.01),
-    color = "white",
     size = 1
   ) +
+  
+  # Add text labels for contours
+  geom_text_contour(
+    data = grid,
+    mapping = aes(x = distance / 1000, y = packccl, z = yhat),
+    skip = 0,
+    stroke.color = "white",
+    stroke = 0.2,
+    label.placer = label_placer_n(1)
+  ) +
+  
+  # Color fill
   viridis::scale_fill_viridis(option = "plasma") +
+  
+  # Manually add lines to legend
+  scale_linetype_manual(
+    name = "Lines",
+    values = c("95% CI" = "dashed", "Smallest Error" = "solid")
+  ) +
+  scale_color_manual(
+    name = "Lines",
+    values = c("95% CI" = "grey", "Smallest Error" = "green2")
+  ) +
+  
+  # Labels and themes
   labs(
-    title = "Predicted Voltage Error by Charge Current Limit - With 95% Confidence Intervals",
+    title = "RSM for CCL",
+    subtitle = "Predicted Voltage Error by Charge Current Limit",
     x = "Distance (km)",
     y = "Charge Current Limit",
-    fill = "Squared Error from Ideal Voltage"
+    fill = "Squared Error \n from Ideal \n Voltage"
   ) +
   theme_minimal()
 
-print(p)
+print(p_CCL)
 
 
 # Save the plot
 ggsave(
   filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_CCL_WithCIs.png"),
-  plot = p
+  plot = p_CCL,
+  dpi = 300,
+  width = 7,
+  height = 5
 )
 
 bestccl = grid %>%
