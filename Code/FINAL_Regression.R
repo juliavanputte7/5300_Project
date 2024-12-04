@@ -865,15 +865,15 @@ install.packages("ggpubr")
 library(ggpubr)
 summaryp = ggpubr::ggarrange(plotlist = list(p_DCL,p_CCL,p_curr), 
                              common.legend = TRUE,legend = "right",
-                             nrow=1,ncol=3 )
+                             nrow=3,ncol=1 )
 
 print(summaryp)
 
 ggsave(
   dpi = 300,
-  width = 14,
-  height = 6,
-  filename = paste0("Code/RSM Plots/POSTER_RSM.png"),
+  width = 7,
+  height = 15,
+  filename = paste0("Code/RSM Plots/POSTER_RSM_Vertical.png"),
   plot = summaryp
 )
 
