@@ -510,7 +510,7 @@ data_dvsv <- regression_data %>%
   )
 
 # Plot
-ggplot(data_dvsv, aes(x = avg_distance_km, y = voltage_diff)) +
+p = ggplot(data_dvsv, aes(x = avg_distance_km, y = voltage_diff)) +
   geom_line(data = data_dvsv, aes(x=avg_distance_km, y=predicted_vdiff),color='darkgrey') +
   geom_line(aes(color = as.factor(logdate)), size = 1) +
   # Plot the ideal SOC curve
