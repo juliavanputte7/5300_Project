@@ -26,11 +26,8 @@ library(metR)
 data = read_csv("COMBINED_With_Ground_Speed_CLEANED_1Decimal (1).csv") %>% 
   setNames(nm = stringr::str_replace_all(tolower(names(.)), " ", "")) 
 
-# Remove NAs
-data <- data %>% filter(!is.na(distance))
-
-# Remove Infs
-data <- data %>% filter(!is.infinite(distance))
+# Remove NAs, Infs, and only look at ARG24
+data <- data %>% filter(!is.na(distance)) %>% filter(!is.infinite(distance))
 
 # Remove rows where distance is greater than 22km
 data = data %>% filter(distance <= 22000)
@@ -176,3 +173,110 @@ mode_avg_bmsdcvoltage = as.numeric(names(sort(table(data$avg_bmsdcvoltage), decr
 mode_inv_commandtq = as.numeric(names(sort(table(data$inv_commandtq), decreasing = TRUE))[1])
 mode_idealv = as.numeric(names(sort(table(data$idealv), decreasing = TRUE))[1])
 mode_gforcelat = as.numeric(names(sort(table(data$gforcelat),decreasing = TRUE))[1])
+
+
+data = data %>% mutate(squared_error = (data$avg_bmsdcvoltage-data$idealv)^2)
+
+mean_squared_error = mean(data$squared_error)
+median_squared_error = median(data$squared_error)
+min_squared_error = min(data$squared_error)
+max_squared_error = max(data$squared_error)
+mode_squared_error = as.numeric(names(sort(table(data$squared_error), decreasing = TRUE))[1])
+
+
+#Getting the sample size #########################
+# Load Packages
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(stringr)
+library(broom)
+library(tidyr)
+library(tidyverse)
+library(viridis)
+library(texreg)
+library(corrplot)
+library(metR)
+
+# Read and Clean Data ###############
+## Read in the data #########
+data = read_csv("COMBINED_With_Ground_Speed_CLEANED_1Decimal (1).csv") %>% 
+  setNames(nm = stringr::str_replace_all(tolower(names(.)), " ", "")) 
+
+# Remove NAs, Infs, and only look at ARG24
+data <- data %>% filter(!is.na(distance)) %>% filter(!is.infinite(distance))
+
+# Remove rows where distance is greater than 22km
+data = data %>% filter(distance <= 22000)
+
+# Remove columns we do not need (leftover from previous model where we use SOC)
+data <- data %>% select(-idealsoc, -soc_delta)
+data %>% glimpse()
+
+# Convert gforce to absolute and get ideal voltage
+data = data %>% mutate(gforcelat = abs(gforcelat),
+                       gforcelong = abs(gforcelong),
+                       distance_km = distance/1000)
+
+## Group by every 30 seconds ###########
+# Step 1: Create a new column for the 30-second time group
+data <- data %>%
+  group_by(logdate) %>% 
+  mutate(time_group = floor(second / 30) * 30) %>% 
+  ungroup()
+
+# Step 2: Calculate the average bmsdcvoltage and distance and current for each logdate and time group
+data <- data %>%
+  group_by(logdate, time_group) %>%
+  mutate(avg_bmsdcvoltage = mean(bmsdcvoltage, na.rm = TRUE),
+         avg_distance = mean(distance), na.rm=TRUE,
+         avg_current = mean(bms_dccurrent), na.rm=TRUE,
+         avg_soc = mean(packsoc), na.rm=TRUE) %>%
+  ungroup()
+
+data %>% glimpse()
+
+data$logdate %>% unique()
+
+##Max times for each date ####################
+
+max_5_7_23_time = filter(data, logdate == "5/7/23") %>% pull(time) %>% max()
+
+max_5_30_23_time = filter(data, logdate == "5/30/23") %>% pull(time) %>% max()
+
+max_4_19_24_time = filter(data, logdate == "4/19/24") %>% pull(time) %>% max()
+
+max_4_28_24_time = filter(data, logdate == "4/28/24") %>% pull(time) %>% max()
+
+max_5_22_24_time = filter(data, logdate == "5/22/24") %>% pull(time) %>% max()
+
+max_6_2_24_time = filter(data, logdate == "6/2/24") %>% pull(time) %>% max()
+
+max_6_8_24_time = filter(data, logdate == "6/8/24") %>% pull(time) %>% max()
+
+max_6_15_24_time = filter(data, logdate == "6/15/24") %>% pull(time) %>% max()
+
+##Sample sizes ########################
+
+sample_rate = 1000
+
+sample_size_5_7_23 = max_5_7_23_time * 1000
+
+sample_size_5_30_23 = max_5_30_23_time * 1000
+
+sample_size_4_19_24 = max_4_19_24_time * 1000
+
+sample_size_4_28_24 = max_4_28_24_time * 1000
+
+sample_size_5_22_24 = max_5_22_24_time * 1000
+
+sample_size_6_2_24 = max_6_2_24_time * 1000
+
+sample_size_6_8_24 = max_6_8_24_time * 1000
+
+sample_size_6_15_24 = max_6_15_24_time * 1000
+
+rm(max_5_7_23_time, max_5_30_23_time, max_4_19_24_time, max_4_28_24_time, max_5_22_24_time, max_6_2_24_time, max_6_8_24_time, max_6_15_24_time)
+
+
+
