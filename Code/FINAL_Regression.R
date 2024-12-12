@@ -20,6 +20,8 @@ library(viridis)
 library(texreg)
 library(corrplot)
 library(metR)
+library(ggplot2)
+library(viridis)
 # Load in Ideal voltage function
 source("Code/ideal_voltage_function.R")
 
@@ -41,6 +43,7 @@ data <- data %>% select(-idealsoc, -soc_delta)
 # Convert gforce to absolute and get ideal voltage
 data = data %>% mutate(gforcelat = abs(gforcelat),
                        gforcelong = abs(gforcelong),
+                       total_acceleration = gforcelat + gforcelong,
                        distance_km = distance/1000,
                        idealv = ideal_voltage(distance_km))
 
@@ -194,7 +197,9 @@ p = ggplot(data, aes(x = distance_km, y = idealv)) +
   # Legend title
   scale_color_discrete(name = "Race Date") +
   # Theme
-  theme_minimal()
+  theme_minimal(base_size = 18) +
+  theme(plot.title = element_text(size = 18), plot.subtitle = element_text(size = 16), axis.title = element_text(size = 14) )
+
 
 print(p)
 
@@ -258,11 +263,11 @@ print(columns)
 # Correlation Plot ########
 # We want to avoid collinearity so we will plot the covariance matrix
 # Select numeric data and make sure not correlated
-corr_data = select(data, c(avg_current, time,inv_commandtq,groundspeed,packdcl,packccl,gforcelat,gforcelong, bms_dccurrent))
+corr_data = select(data, c(avg_current, distance,inv_commandtq,groundspeed,packdcl,packccl,gforcelat,gforcelong, bms_dccurrent))
 matrix = cor(corr_data)
 
 # Rename for better visual
-new_names <- c("30 sec Avg Current", "Time", "Torque", "Speed", "DCL", "CCL", "Lateral Acceleration", "Longitudinal Acceleration", "Current")
+new_names <- c("30 sec Avg Current", "Distance", "Torque", "Speed", "DCL", "CCL", "Lateral Acceleration", "Longitudinal Acceleration", "Current")
 rownames(matrix) <- new_names
 colnames(matrix) <- new_names
 
@@ -456,7 +461,8 @@ browseURL("Code/all_models.html")
 # Regression Plots #########
 
 regression_data = data %>% 
-  select(avg_current, distance,packdcl,packccl,voltage_diff)
+  select(avg_current, distance,packdcl,packccl,voltage_diff, gforcelat, 
+         gforcelong, batttemphi, batttemplo, inv_commandtq, groundspeed,total_acceleration )
 
 # List of variables to plot
 variables <- colnames(regression_data)[colnames(regression_data) != "voltage_diff"]   # Exclude 'time'
@@ -465,7 +471,16 @@ variable_names <- list(
   avg_current = "Average Current (A)",
   distance = "Distance (m)",
   packdcl = "Discharge Current Limit",
-  packccl = "Charge Current Limit"
+  packccl = "Charge Current Limit",
+  gforcelat = "Lateral G Force",
+  gforcelong = "Longitudinal G Force",
+  total_acceleration ="Acceleration",
+  batttemphi = "Battery Temperature High",
+  batttemplo = "Battery Temperature Low",
+  inv_commandtq = "Torque",
+  groundspeed = "Ground Speed"
+  
+  
 )
 
 # Loop through variables and create plots
@@ -509,20 +524,28 @@ data_dvsv <- regression_data %>%
     avg_distance_km = avg_distance / 1000
   )
 
-# Plot
 p = ggplot(data_dvsv, aes(x = avg_distance_km, y = voltage_diff)) +
-  geom_line(data = data_dvsv, aes(x=avg_distance_km, y=predicted_vdiff),color='darkgrey') +
+  geom_line(data = data_dvsv, aes(x = avg_distance_km, y = predicted_vdiff, color = "Model Prediction"), size = 1) +
   geom_line(aes(color = as.factor(logdate)), size = 1) +
-  # Plot the ideal SOC curve
-  #geom_line(data = data, aes(x = distance_km, y = idealv), color = "Ideal", size = 1.5, linetype = "solid") +
   labs(
-    title = "Squared Error from Ideal Voltage vs Model Prediction (Grey) Over Distance",
+    title = "Squared Error from Ideal Voltage vs Model Prediction Over Distance",
     x = "Distance (km)",
     y = "Voltage Difference from Ideal (Squared)",
-    color = "Race Date"
+    color = "Legend"
+  ) +
+  scale_color_manual(
+    values = c("Model Prediction" = "black", 
+               setNames(scales::hue_pal()(length(unique(data_dvsv$logdate))), unique(data_dvsv$logdate))),
+    breaks = c("Model Prediction", as.character(unique(data_dvsv$logdate)))
   ) +
   theme_minimal() +
   facet_wrap(~logdate, ncol = 2)
+
+p
+
+scales::h
+
+
 
 ggsave(
   filename = paste0("Code/General Plots/Predictions.png"),
@@ -535,35 +558,77 @@ ggsave(
 remove(data_dvsv)
 
 
+
+# Monte Carlo Sampling Procedure
+
+#' #' @name get_se
+#' #' @description 
+#' #' Approximate the standard error by using the mean fitted  value as our benchmark point
+#' get_se = function(model, prob = 0.5){
+#'   # Testing data
+#'   # model = m3_s
+#'   
+#'   # model$fitted.values
+#'   # predict(model)
+#'   
+#'   
+#'   yhat_sqrt = quantile(model$fitted.values, prob = prob)
+#'   sigma_sqrt = broom::glance(model)$sigma
+#'   
+#'   ysim = rnorm(n = 1000, mean = yhat_sqrt, sd = sigma_sqrt)^2
+#'   
+#'   sigma = sd(ysim)
+#'   
+#'   return(sigma)
+#' }
+#' 
+#' get_se(model = m3_s, prob = 0.25)
+#' get_se(model = m3_s, prob = 0.5)
+#' get_se(model = m3_s, prob = 0.75)
+
 # RSM - With CIs ###########
 
 ## DCL ########
 grid = expand_grid(
-  distance = seq(from=0, to = max(data$distance), by=10),
+  distance = seq(from=0, to = max(data$distance), by=300),
   packdcl = seq(from = 15, to = max(data$packdcl), by = 1),
 ) %>%
   mutate(packccl = 25, #This is the mode
-         avg_current = median(data$avg_current))
+         avg_current = median(data$avg_current)) %>%
+  mutate(id = 1:n())
 
-# Make prediction with confidence interval
-prediction = predict(m3_s, newdata = grid, interval = "confidence", level = 0.95)
+# tibble(rep = 1:1000) %>%
+#   group_by(rep) %>%
+#   reframe(grid) 
+
+grid = grid %>%
+  mutate(yhat = predict(m3_s, newdata = .),
+         se = glance(m3_s)$sigma)
+  
+# Monte carlo sampling
+grid = grid %>% 
+  group_by(id) %>%
+  reframe(
+    ysim = rnorm(n = 10000, mean = yhat, sd = se),
+    ysim = ysim^2
+  ) %>%
+  group_by(id) %>%
+  summarize(
+    upper = quantile(ysim, probs = 0.95)) %>%
+  left_join(by = "id", y = grid)
+
 
 # Get the grid with confidence interval
 grid = grid %>% 
   mutate(
-    yhat = prediction[, "fit"]^2,
-    lower_ci = prediction[, "lwr"]^2,
-    upper_ci = prediction[, "upr"]^2
+    yhat = grid$yhat^2,
   )
-remove(prediction)
 
-library(ggplot2)
-library(viridis)
 
 # Add a column to the dataset to define line type for each contour
 grid <- grid %>%
   mutate(line_type = case_when(
-    between(yhat, 0.009, 0.011) ~ "Smallest Error",
+    between(yhat, 0, 0.011) ~ "Smallest Error",
     TRUE ~ "95% CI"
   ))
 
@@ -579,14 +644,6 @@ p_DCL <- ggplot() +
     size = 0.5
   ) +
   
-  # Lower CI contours
-  geom_contour(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = packdcl, z = lower_ci, linetype = "95% CI"),
-    color = "grey",
-    size = 0.5
-  ) +
-  
   # Smallest error line
   geom_contour(
     data = grid,
@@ -599,7 +656,7 @@ p_DCL <- ggplot() +
   # Upper CI contours
   geom_contour(
     data = grid,
-    mapping = aes(x = distance / 1000, y = packdcl, z = upper_ci, linetype = "95% CI"),
+    mapping = aes(x = distance / 1000, y = packdcl, z = upper, linetype = "Upper 95% CI"),
     color = "grey",
     size = 0.5
   ) +
@@ -620,29 +677,31 @@ p_DCL <- ggplot() +
   # Manually add lines to legend
   scale_linetype_manual(
     name = " ",
-    values = c("Smallest Error" = "solid", "95% CI" = "dashed")
+    values = c("Smallest Error" = "solid", "Upper 95% CI" = "dashed")
   ) +
   scale_color_manual(
     name = " ",
-    values = c("Smallest Error" = "green2", "95% CI" = "grey")
+    values = c("Smallest Error" = "green2", "Upper 95% CI" = "grey")
   ) +
   
   # Labels and themes
   labs(
     title = "RSM for DCL",
-    subtitle = "Predicted Voltage Error by Discharge Current Limit",
+    subtitle = "Predicted Error by Discharge Current Limit",
     x = "Distance (km)",
     y = "Discharge Current Limit",
     fill = "Squared Error \n from Ideal \n Voltage"
   ) +
-  theme_minimal()
+  theme_minimal(base_size = 18) +
+  theme(plot.title = element_text(size = 18), plot.subtitle = element_text(size = 16), axis.title = element_text(size = 14) )
+
 
 print(p_DCL)
 
 
 # Save the plot
 ggsave(
-  filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_DCL_with_CIs.png"),
+  filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_DCL_WITH_CIs.png"),
   plot = p_DCL,
   dpi = 300,
   width = 7,
@@ -655,21 +714,34 @@ bestdcl
 
 ## CCL ########
 grid = expand_grid(
-  distance = seq(from=0, to = max(data$distance), by=10),
+  distance = seq(from=0, to = max(data$distance), by=300),
   packccl = seq(from = min(data$packccl), to = max(data$packccl), by = .25),
 ) %>%
   mutate(packdcl = 30, #This is the mode
-         avg_current = median(data$avg_current))
+         avg_current = median(data$avg_current))%>%
+  mutate(id = 1:n())
 
-# Make prediction with confidence interval
-prediction = predict(m3_s, newdata = grid, interval = "confidence", level = 0.95)
+grid = grid %>%
+  mutate(yhat = predict(m3_s, newdata = .),
+         se = glance(m3_s)$sigma)
+
+# Monte carlo sampling
+grid = grid %>% 
+  group_by(id) %>%
+  reframe(
+    ysim = rnorm(n = 10000, mean = yhat, sd = se),
+    ysim = ysim^2
+  ) %>%
+  group_by(id) %>%
+  summarize(
+    upper = quantile(ysim, probs = 0.95)) %>%
+  left_join(by = "id", y = grid)
+
 
 # Get the grid with confidence interval
 grid = grid %>% 
   mutate(
-    yhat = prediction[, "fit"]^2,
-    lower_ci = prediction[, "lwr"]^2,
-    upper_ci = prediction[, "upr"]^2
+    yhat = grid$yhat^2,
   )
 
 p_CCL <- ggplot() +
@@ -684,21 +756,13 @@ p_CCL <- ggplot() +
     size = 0.5
   ) +
   
-  # Lower CI contours
-  geom_contour(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = packccl, z = lower_ci, color = "95% CI", linetype = "95% CI"),
-    binwidth = 500,
-    size = 0.5
-  ) +
-  
-  # Upper CI contours
-  geom_contour(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = packccl, z = upper_ci, color = "95% CI", linetype = "95% CI"),
-    binwidth = 500,
-    size = 0.5
-  ) +
+  # # Upper CI contours
+  # geom_contour(
+  #   data = grid,
+  #   mapping = aes(x = distance / 1000, y = packccl, z = upper, color = "Upper 95% CI", linetype = "Upper 95% CI"),
+  #   binwidth = 500,
+  #   size = 0.5
+  # ) +
   
   # Smallest Error line
   geom_contour(
@@ -724,22 +788,24 @@ p_CCL <- ggplot() +
   # Manually add lines to legend
   scale_linetype_manual(
     name = " ",
-    values = c("95% CI" = "dashed", "Smallest Error" = "solid")
+    values = c("Upper 95% CI" = "dashed", "Smallest Error" = "solid")
   ) +
   scale_color_manual(
     name = " ",
-    values = c("95% CI" = "grey", "Smallest Error" = "green2")
+    values = c("Upper 95% CI" = "grey", "Smallest Error" = "green2")
   ) +
   
   # Labels and themes
   labs(
     title = "RSM for CCL",
-    subtitle = "Predicted Voltage Error by Charge Current Limit",
+    subtitle = "Predicted Error by Charge Current Limit",
     x = "Distance (km)",
     y = "Charge Current Limit",
     fill = "Squared Error \n from Ideal \n Voltage"
   ) +
-  theme_minimal()
+  theme_minimal(base_size = 18) +
+  theme(plot.title = element_text(size = 18), plot.subtitle = element_text(size = 16), axis.title = element_text(size = 14) )
+
 
 print(p_CCL)
 
@@ -759,23 +825,35 @@ bestccl
 
 ## Average Current ########
 grid = expand_grid(
-  distance = seq(from=0, to = max(data$distance), by=10),
+  distance = seq(from=0, to = max(data$distance), by=300),
   avg_current = seq(from = min(data$avg_current), to = max(data$avg_current), by = 1),
 ) %>%
   mutate(packdcl = 30, #This is the mode
-         packccl = 25)
+         packccl = 25)%>%
+  mutate(id = 1:n())
 
-# Make prediction with confidence interval
-prediction = predict(m3_s, newdata = grid, interval = "confidence", level = 0.95)
+grid = grid %>%
+  mutate(yhat = predict(m3_s, newdata = .),
+         se = glance(m3_s)$sigma)
+
+# Monte carlo sampling
+grid = grid %>% 
+  group_by(id) %>%
+  reframe(
+    ysim = rnorm(n = 10000, mean = yhat, sd = se),
+    ysim = ysim^2
+  ) %>%
+  group_by(id) %>%
+  summarize(
+    upper = quantile(ysim, probs = 0.95)) %>%
+  left_join(by = "id", y = grid)
+
 
 # Get the grid with confidence interval
 grid = grid %>% 
   mutate(
-    yhat = prediction[, "fit"]^2,
-    lower_ci = prediction[, "lwr"]^2,
-    upper_ci = prediction[, "upr"]^2
+    yhat = grid$yhat^2,
   )
-
 # Add contour tolerance
 p_curr <- ggplot() +
   geom_tile(data = grid, mapping = aes(x = distance / 1000, y = avg_current, fill = yhat)) +
@@ -788,19 +866,11 @@ p_curr <- ggplot() +
     binwidth = 500,
     size = 0.5
   ) +
-  
-  # Lower CI contours
-  geom_contour(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = lower_ci, color = "95% CI", linetype = "95% CI"),
-    binwidth = 500,
-    size = 0.5
-  ) +
-  
+
   # Upper CI contours
   geom_contour(
     data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = upper_ci, color = "95% CI", linetype = "95% CI"),
+    mapping = aes(x = distance / 1000, y = avg_current, z = upper, color = "Upper 95% CI", linetype = "Upper 95% CI"),
     binwidth = 500,
     size = 0.5
   ) +
@@ -829,22 +899,24 @@ p_curr <- ggplot() +
   # Manually add lines to legend
   scale_linetype_manual(
     name = " ",
-    values = c("95% CI" = "dashed", "Smallest Error" = "solid")
+    values = c("Upper 95% CI" = "dashed", "Smallest Error" = "solid")
   ) +
   scale_color_manual(
     name = " ",
-    values = c("95% CI" = "grey", "Smallest Error" = "green2")
+    values = c("Upper 95% CI" = "grey", "Smallest Error" = "green2")
   ) +
   
   # Labels and themes
   labs(
     title = "RSM for Average Current",
-    subtitle = "Predicted Voltage Error by 30s Avg Current",
+    subtitle = "Predicted Error by 30s Avg Current",
     x = "Distance (km)",
     y = "Average Current",
     fill = "Squared Error \n from Ideal \n Voltage"
   ) +
-  theme_minimal()
+  theme_minimal(base_size = 18) +
+  theme(plot.title = element_text(size = 18), plot.subtitle = element_text(size = 16), axis.title = element_text(size = 14) )
+
 
 print(p_curr)
 
@@ -864,208 +936,131 @@ bestcurrent = grid %>%
 install.packages("ggpubr")
 library(ggpubr)
 summaryp = ggpubr::ggarrange(plotlist = list(p_DCL,p_CCL,p_curr), 
-                             common.legend = TRUE,legend = "right",
+                             common.legend = TRUE,legend = "none",
                              nrow=3,ncol=1 )
 
 print(summaryp)
 
 ggsave(
   dpi = 300,
-  width = 7,
-  height = 15,
+  width = 6,
+  height = 18,
   filename = paste0("Code/RSM Plots/POSTER_RSM_Vertical.png"),
   plot = summaryp
 )
 
-# Parameter Optimization############
-
-# bestcurrent, bestdcl, bestccl is all parameter combinations where error is minimized
-# We will find the parameters to get us the closest to error of 0!
-
+# Parameter Optimization Simple############
 bestcurrent = bestcurrent$avg_current
 bestcurrent
 # 20.19853
-# But, many currents seem to get an error close to 0
 
 bestdcl = bestdcl$packdcl
 bestdcl
-# 33
+# 35
 
 bestccl = bestccl$packccl
 bestccl
-# 29
+# 26.5
 
-## RSM with optimal DCL CCL
-## Average Current ########
 grid = expand_grid(
-  distance = seq(from=0, to = max(data$distance), by=10),
-  avg_current = seq(from = min(data$avg_current), to = max(data$avg_current), by = 1),
-) %>%
-  mutate(packdcl = 33, #This is the mode
-         packccl = 29)
+  distance = c(5000,10000,15000)) %>% 
+    mutate(packdcl = 35,
+           packccl = 26.5,
+           avg_current = bestcurrent) %>%
+  mutate(id = 1:n())
 
-# Make prediction with confidence interval
-prediction = predict(m3_s, newdata = grid, interval = "confidence", level = 0.95)
+grid = grid %>%
+  mutate(yhat = predict(m3_s, newdata = .),
+         se = glance(m3_s)$sigma)
 
-# Get the grid with confidence interval
+# Monte carlo sampling
 grid = grid %>% 
-  mutate(
-    yhat = prediction[, "fit"]^2,
-    lower_ci = prediction[, "lwr"]^2,
-    upper_ci = prediction[, "upr"]^2
+  group_by(id) %>%
+  reframe(
+    ysim = rnorm(n = 10000, mean = yhat, sd = se),
+    ysim = ysim^2
+  ) %>%
+  group_by(id) %>%
+  summarize(
+    upper = quantile(ysim, probs = 0.95)) %>%
+  left_join(by = "id", y = grid)
+
+grid
+
+
+# OPTIMAL PARAMS - Complex ########
+# Use optimization to minimize yhat at t=5000,10000,15000
+
+# Define the optimization function
+optimize_params <- function(time, model) {
+  # Define the objective function to minimize
+  objective_function <- function(params) {
+    newdata <- data.frame(
+      distance = time,
+      packdcl = params[1],
+      packccl = params[2],
+      avg_current = params[3]
+    )
+    predict(model, newdata = newdata)^2
+  }
+  
+  # Initial guesses for parameters
+  initial_values <- c(packdcl = 30, packccl = 40, avg_current = 10)
+  
+  # Perform optimization
+  result <- optim(
+    par = initial_values,
+    fn = objective_function,
+    method = "L-BFGS-B",
+    lower = c(15, 0, 0), # Set lower bounds for parameters
+    upper = c(180, 30, 50) # Set upper bounds for parameters
   )
-
-# Add contour tolerance
-p_summary <- ggplot() +
-  geom_tile(data = grid, mapping = aes(x = distance / 1000, y = avg_current, fill = yhat)) +
   
-  # Main contours
-  geom_contour(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = yhat),
-    color = "white", linetype = "solid",
-    binwidth = 500,
-    size = 0.5
-  ) +
-  
-  # Lower CI contours
-  geom_contour(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = lower_ci, color = "95% CI", linetype = "95% CI"),
-    binwidth = 500,
-    size = 0.5
-  ) +
-  
-  # Upper CI contours
-  geom_contour(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = upper_ci, color = "95% CI", linetype = "95% CI"),
-    binwidth = 500,
-    size = 0.5
-  ) +
-  
-  # Smallest Error line
-  geom_contour(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = yhat, color = "Smallest Error", linetype = "Smallest Error"),
-    breaks = c(.01),
-    size = 1
-  ) +
-  
-  # Add text labels for contours
-  geom_text_contour(
-    data = grid,
-    mapping = aes(x = distance / 1000, y = avg_current, z = yhat),
-    skip = 0,
-    stroke.color = "white",
-    stroke = 0.2,
-    label.placer = label_placer_n(1)
-  ) +
-  
-  # Color fill
-  viridis::scale_fill_viridis(option = "plasma") +
-  
-  # Manually add lines to legend
-  scale_linetype_manual(
-    name = " ",
-    values = c("95% CI" = "dashed", "Smallest Error" = "solid")
-  ) +
-  scale_color_manual(
-    name = " ",
-    values = c("95% CI" = "grey", "Smallest Error" = "green2")
-  ) +
-  
-  # Labels and themes
-  labs(
-    title = "RSM for Average Current, With DCL and CCL Optimized",
-    subtitle = "DCL = 33, CCL = 29",
-    x = "Distance (km)",
-    y = "Average Current",
-    fill = "Squared Error \n from Ideal \n Voltage"
-  ) +
-  theme_minimal()
-
-print(p_summary)
-
-# Save the plot
-ggsave(
-  dpi = 300,
-  width = 7,
-  height = 5,
-  filename = paste0("Code/RSM Plots/RSM With Optimal DCL CCL.png"),
-  plot = p_summary
-)
-
-# Get best currents at each distance
-best_current_5000 = grid %>% filter(distance==5000) %>% filter(yhat == min(yhat))
-best_current_10000 = grid %>% filter(distance==10000) %>% filter(yhat == min(yhat))
-best_current_15000 = grid %>% filter(distance==15000) %>% filter(yhat == min(yhat))
-opt_currents = c(best_current_5000$avg_current,best_current_10000$avg_current,best_current_15000$avg_current)
-
-## Optimal Prediction ######
-
-grid_pred = expand_grid(
-  distance = seq(from=5000, to = 15000, by=5000)
-) %>%
-  mutate(packdcl = 33, #This is the optimal
-         packccl = 29, # This is the optimal
-         avg_current = opt_currents) # Current seems to be the best at the maximum level as seeen in the RSM
-
-# Make prediction with confidence interval
-prediction = predict(m3_s, newdata = grid_pred, interval = "confidence", level = 0.95)
-
-# Get the grid with confidence interval
-grid_pred = grid_pred %>% 
-  mutate(
-    yhat = prediction[, "fit"]^2,
-    lower_ci = prediction[, "lwr"]^2,
-    upper_ci = prediction[, "upr"]^2
-  )
-grid_pred
-
-# A tibble: 3 × 7
-# distance packdcl packccl avg_current    yhat lower_ci upper_ci
-# <dbl>   <dbl>   <dbl>       <dbl>   <dbl>    <dbl>    <dbl>
-# 1     5000      33      29        13.2 0.00549  0.00920   0.0596
-# 2    10000      33      29        22.2 0.243    0.457     0.0961
-# 3    15000      33      29        38.2 0.111    0.0240    0.675 
-
-## Optimal Current varies by distance #########
-# Calculate optimal currents for a range of distances
-distances <- seq(0, 21999, by = 1000)  # Example distances
-optimal_currents <- c()
-
-for (d in distances) {
-  best_current <- grid %>% 
-    filter(distance == d) %>% 
-    filter(yhat == min(yhat)) %>% 
-    pull(avg_current)
-  optimal_currents <- c(optimal_currents, best_current)
+  # Return the optimized parameters and the minimum value
+  return(c(
+    distance = time,
+    Optimal_packdcl = result$par[1],
+    Optimal_packccl = result$par[2],
+    Optimal_avg_current = result$par[3],
+    Minimum_Value = result$value
+  ))
 }
 
-# Create a data frame with distances and optimal currents
-optimal_data <- tibble(
-  distance = distances,
-  optimal_current = optimal_currents
-)
+# Set time points
+time_points <- c(0, 5000, 10000, 15000)
+# stop at 15000m since many races do not go below this amount
 
-# Plot distance vs optimal current
-opt_curr = ggplot(optimal_data, aes(x = distance, y = optimal_current)) +
-  geom_line(color = "#b31b1b", size = 1) +
-  labs(
-    title = "Distance vs Optimal Current to Minimize Error",
-    subtitle = "DCL = 33, CCL = 29",
-    x = "Distance (m)",
-    y = "Optimal Current (A)"
-  ) +
-  theme_minimal()
+# Optimize for each time point and calculate confidence intervals
+results <- do.call(rbind, lapply(time_points, function(t) optimize_params(t, m3_s)))
 
-print(opt_curr)
-# Save the plot
-ggsave(
-  dpi = 300,
-  width = 5,
-  height = 5,
-  filename = paste0("Code/RSM Plots/Opt_Currents.png"),
-  plot = opt_curr
-)
+# Convert results to a tibble
+results <- as.data.frame(results)
+
+# Print results
+print(results)
+
+grid = tibble(
+  distance = results$distance,
+  packdcl = results$Optimal_packdcl.packdcl,
+  packccl = results$Optimal_packccl.packccl,
+  avg_current = results$Optimal_avg_current.avg_current
+)%>%
+  mutate(id = 1:n())
+
+grid = grid %>%
+  mutate(yhat = predict(m3_s, newdata = .),
+         se = glance(m3_s)$sigma)
+
+# Monte carlo sampling
+grid = grid %>% 
+  group_by(id) %>%
+  reframe(
+    ysim = rnorm(n = 10000, mean = yhat, sd = se),
+    ysim = ysim^2
+  ) %>%
+  group_by(id) %>%
+  summarize(
+    upper = quantile(ysim, probs = 0.95)) %>%
+  left_join(by = "id", y = grid)
+
+grid

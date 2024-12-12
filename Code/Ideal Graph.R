@@ -37,7 +37,6 @@ p = ggplot(data) +
                                    "Poor Utilization" = "dashed")) +
   labs(x = "Distance (km)", y = "Voltage (V)", 
        title = "Ideal vs No-Finish vs Poor Utilization Voltage Discharge") +
-  theme_minimal() +
   # Add vertical and horizontal lines with annotations
   geom_vline(xintercept = 22, linetype = "dotdash", color = "black", size = 0.5) +
   geom_hline(yintercept = min(data$SOC), linetype = "dotted", color = "darkred") +  # Fixed linetype
@@ -55,7 +54,11 @@ p = ggplot(data) +
                arrow = arrow(length = unit(0.2, "cm")), color = "red") +
   annotate("text", x = 10, y = 390, 
            label = "Quality metric:\nSquared distance\nfrom ideal curve", 
-           color = "red", hjust = 0, size = 4)
+           color = "red", hjust = 0, size = 4) +
+  theme_minimal(base_size = 18) +
+  theme(plot.title = element_text(size = 18), plot.subtitle = element_text(size = 16), axis.title = element_text(size = 14) )
+
+print(p)
   
 
 
