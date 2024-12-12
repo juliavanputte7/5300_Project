@@ -701,7 +701,7 @@ print(p_DCL)
 
 # Save the plot
 ggsave(
-  filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_DCL_WITH_CIs.png"),
+  filename = paste0("Code/RSM Plots/Ideal_Voltage_Diff_vs_DCL_UPPER_CIs.png"),
   plot = p_DCL,
   dpi = 300,
   width = 7,
