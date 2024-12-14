@@ -9,9 +9,9 @@ Right now, the legendary Cornell FSAE project team has both a problem and an opp
 We will create a vehicle performance model that will allow for optimal system design for the vehicle to minimize total race time while ensuring high reliability in finishing the race, thus maximizing potential earned points for the team.
 
 Multivariate linear regression:
-Can we predict what factors influence the difference of the car battery pack’s SOC % versus the optimal SOC % for that time? This is done in the hopes of minimizing the difference between the optimal SOC discharge curve and the racecar’s SOC discharge curve. This will increase our likelihood of finishing the race.
+Can we predict what factors influence the difference of the car battery pack’s voltage discharge versus the optimal voltage discharge over the 22 km race? This is done in the hopes of minimizing the difference between the optimal voltage discharge curve and the car's voltage discharge curve. This will increase our likelihood of finishing the race.
+We will use this linear regression to determine which factors are significant predictors for minimizing the difference between the optimal battery depletion and our own data’s observed battery depletion.
 
-Response Surface Methodology - Design Optimization
-What is the optimal combination of factors to ensure that our battery depletion during a 22km race is as close to optimal as possible (depleting as much charge as possible to go as fast as possible but ending the race with 5% charge)
-We will use a linear regression to determine which factors are significant predictors for minimizing the difference between the optimal battery depletion and our own data’s observed battery depletion. 
-We will make an RSM to help Cornell FSAE optimize their race performance by modeling the relationship between factors influencing optimal battery depletion and recommending the optimal combination of factors to maximize the chance of optimal battery depletion
+Response Surface Methodology - Design Optimization:
+What is the optimal combination of factors to ensure that our battery voltage depletion during a 22 km race is as close to optimal as possible (depleting as much charge as possible to go as fast as possible but ending the race with 5% charge)
+We will make an RSM to help Cornell FSAE optimize their race performance by modeling the relationship between factors influencing optimal battery depletion and recommending the optimal combination of factors to maximize the chance of optimal battery depletion.
