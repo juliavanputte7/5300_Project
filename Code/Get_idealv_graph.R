@@ -40,6 +40,8 @@ data_avg <- data_binned %>%
 
 
 # Step 1: Filter the data for the ARG24 vehicle
+# CHANGE THIS IF YOU WANT TO DO IT FOR ARG25
+# ARG23 DATA WAS BAD
 data_arg24 <- data_avg %>%
   filter(vehicle == "ARG24")
 
@@ -96,6 +98,7 @@ ggplot(data_arg24_stretched, aes(x = stretched_distance, y = scaled_voltage)) +
   annotate("text", x = 1, y = max_voltage_arg24_noavg, label = paste("Max Voltage"),
            vjust = -0.5, color = "blue", size = 3)
 
+saveRDS(data_arg24_stretched, file = "Data/data_arg24_stretched.Rds")
 
 # Define ideal voltage function
 ideal_voltage <- function(distance) {
